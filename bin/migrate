@@ -1,0 +1,21 @@
+#!/usr/bin/env node
+import {
+  Examen,
+} from '../models';
+
+
+const models = {
+  Examen,
+};
+
+async function migrate() {
+  for (const i in models) {
+    console.log(`Migrate ${i}`);
+    await models[i].sync({ alter: true });
+  }
+  process.exit(0);
+}
+
+migrate();
+
+
