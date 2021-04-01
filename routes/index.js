@@ -1,8 +1,10 @@
 import express from 'express';
-import examen from './examen';
+import users from './users';
+import events from './events';
 
 const router = express.Router();
 
-router.use('/examen', examen);
+router.use('/users', users);
+router.use('/events', events);
 
 export default router;
