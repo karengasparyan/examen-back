@@ -1,6 +1,5 @@
 import validate from '../services/validate';
 import HttpError from 'http-errors';
-
 const {users} = require("../models").models;
 import md5 from 'md5';
 import fs from 'fs';
@@ -24,6 +23,7 @@ class UsersController {
             });
 
             const {email, password, repeatPassword, first_name, last_name, age, phone} = req.body;
+            const {files} = req;
 
             if (password !== repeatPassword) {
                 throw HttpError(422, 'invalid repeat password');
@@ -35,16 +35,50 @@ class UsersController {
                 throw HttpError(402, 'this email is busy');
             }
 
-           const newUser = await users.create({
+            const allowTypes = {
+                'image/jpeg': '.jpg',
+                'image/gif': '.gif',
+                'image/png': '.png',
+            };
+
+            files.forEach(file => {
+                const {mimetype} = file;
+                if (!allowTypes[mimetype]) {
+                    throw HttpError(422, 'invalid file type');
+                }
+            });
+
+            const uniqId = uuid();
+
+            const direction = await path.join(__dirname, `../public/userImage/folder_${uniqId}`);
+            if (!fs.existsSync(direction)) {
+                fs.mkdirSync(direction, {recursive: true});
+            }
+
+            const CreatePictures = [];
+
+            await Promise.map(files, async (file) => {
+                const ext = allowTypes[file.mimetype];
+                const fileName = `image_${uuid()}${ext}`;
+                fs.writeFileSync(path.join(direction, fileName), file.buffer);
+                CreatePictures.push(fileName);
+            });
+
+            const newUser = await users.create({
                 email,
                 password: md5(password, '++'),
                 first_name,
                 last_name,
                 age,
-                phone
+                phone,
+                picture: CreatePictures
             });
 
-            await res.json({
+            const directionRename = await path.join(__dirname, `../public/userImage/folder_${newUser.id}`);
+
+            fs.renameSync(direction, directionRename)
+
+            res.json({
                 status: 'ok',
                 user: newUser,
             });
@@ -59,8 +93,6 @@ class UsersController {
             await validate(req.body, {
                 userId: 'required|string',
             });
-
-            console.log(req.files)
 
             const {files} = req;
             const {userId} = req.body;
@@ -98,9 +130,9 @@ class UsersController {
                 CreatePictures.push(fileName);
             });
 
-            await users.update({id: user._id, picture: CreatePictures});
+            await users.updateOne({id: user._id, picture: CreatePictures});
 
-            await res.json({
+            res.json({
                 status: 'ok',
             });
         } catch (e) {
@@ -108,7 +140,6 @@ class UsersController {
             next(e);
         }
     };
-
 
 
     static signIn = async (req, res, next) => {
@@ -123,14 +154,16 @@ class UsersController {
             const {email, password} = req.body;
 
             const user = await users.findOne({email, password: md5(password, '++')});
-
             if (user.email !== email || md5(password, '++') !== user.password) {
                 throw HttpError(422, 'invalid username or password');
             }
 
-            const token = jwt.sign({userId: user.id}, JWT_SECRET);
+            console.log(user)
+            console.log(JWT_SECRET)
+            const token = jwt.sign({userId: user._id}, JWT_SECRET);
 
-            return res.json({
+
+           res.json({
                 status: 'ok',
                 user,
                 token,

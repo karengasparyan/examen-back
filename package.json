@@ -3,9 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "node -r esm ./bin/www",
-    "migrate": "node -r esm bin/migrate",
-    "dev": "nodemon -r esm ./bin/www"
+    "start": "node -r esm -r dotenv/config ./bin/www",
+    "migrate": "node -r esm -r dotenv/config bin/migrate",
+    "dev": "nodemon -r esm -r dotenv/config ./bin/www"
   },
   "dependencies": {
     "bluebird": "^3.7.2",
