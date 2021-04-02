@@ -1,11 +1,13 @@
 import validate from '../services/validate';
 import HttpError from 'http-errors';
+
 const {users} = require("../models").models;
 import md5 from 'md5';
 import fs from 'fs';
 import {v4 as uuid} from 'uuid';
 import Promise from 'bluebird';
 import path from 'path';
+import jwt from 'jsonwebtoken';
 
 class UsersController {
 
@@ -22,7 +24,6 @@ class UsersController {
             });
 
             const {email, password, repeatPassword, first_name, last_name, age, phone} = req.body;
-            const {files} = req;
 
             if (password !== repeatPassword) {
                 throw HttpError(422, 'invalid repeat password');
@@ -32,6 +33,42 @@ class UsersController {
 
             if (user) {
                 throw HttpError(402, 'this email is busy');
+            }
+
+           const newUser = await users.create({
+                email,
+                password: md5(password, '++'),
+                first_name,
+                last_name,
+                age,
+                phone
+            });
+
+            await res.json({
+                status: 'ok',
+                user: newUser,
+            });
+        } catch (e) {
+
+            next(e);
+        }
+    };
+
+    static uploadImage = async (req, res, next) => {
+        try {
+            await validate(req.body, {
+                userId: 'required|string',
+            });
+
+            console.log(req.files)
+
+            const {files} = req;
+            const {userId} = req.body;
+
+            const user = await users.findOne({_id: userId});
+
+            if (!user) {
+                throw HttpError(404);
             }
 
             const allowTypes = {
@@ -47,9 +84,7 @@ class UsersController {
                 }
             });
 
-            const CreatedUser = await users.create({email, password: md5(password,'++'), first_name, last_name, age, phone});
-
-            const direction = await path.join(__dirname, `../public/userImage/${CreatedUser._id}`);
+            const direction = await path.join(__dirname, `../public/userImage/${userId}`);
             if (!fs.existsSync(direction)) {
                 fs.mkdirSync(direction, {recursive: true});
             }
@@ -63,7 +98,7 @@ class UsersController {
                 CreatePictures.push(fileName);
             });
 
-            await users.update({id: CreatedUser._id, picture: CreatePictures});
+            await users.update({id: user._id, picture: CreatePictures});
 
             await res.json({
                 status: 'ok',
@@ -74,6 +109,8 @@ class UsersController {
         }
     };
 
+
+
     static signIn = async (req, res, next) => {
         try {
             await validate(req.body, {
@@ -81,19 +118,25 @@ class UsersController {
                 password: 'required|string',
             });
 
+            const {JWT_SECRET} = process.env;
+
             const {email, password} = req.body;
 
-            const user = await users.findOne({email, password:  md5(password,'++')});
+            const user = await users.findOne({email, password: md5(password, '++')});
 
-            if (user.email !== email || md5(password,'++') !== user.password) {
+            if (user.email !== email || md5(password, '++') !== user.password) {
                 throw HttpError(422, 'invalid username or password');
             }
+
+            const token = jwt.sign({userId: user.id}, JWT_SECRET);
 
             return res.json({
                 status: 'ok',
                 user,
+                token,
             });
         } catch (e) {
+            console.log("error",e)
             next(e);
         }
     };
