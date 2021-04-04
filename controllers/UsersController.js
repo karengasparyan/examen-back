@@ -7,6 +7,7 @@ import {v4 as uuid} from 'uuid';
 import Promise from 'bluebird';
 import path from 'path';
 import jwt from 'jsonwebtoken';
+import _ from 'lodash';
 
 class UsersController {
 
@@ -33,6 +34,10 @@ class UsersController {
 
             if (user) {
                 throw HttpError(402, 'this email is busy');
+            }
+
+            if (_.isEmpty(files)) {
+                throw HttpError(402, 'Image is required');
             }
 
             const allowTypes = {
@@ -83,7 +88,7 @@ class UsersController {
                 user: newUser,
             });
         } catch (e) {
-
+            console.log(e)
             next(e);
         }
     };
@@ -154,14 +159,12 @@ class UsersController {
             const {email, password} = req.body;
 
             const user = await users.findOne({email, password: md5(password, '++')});
-            if (user.email !== email || md5(password, '++') !== user.password) {
+
+            if (!user) {
                 throw HttpError(422, 'invalid username or password');
             }
 
-            console.log(user)
-            console.log(JWT_SECRET)
             const token = jwt.sign({userId: user._id}, JWT_SECRET);
-
 
            res.json({
                 status: 'ok',
@@ -169,7 +172,6 @@ class UsersController {
                 token,
             });
         } catch (e) {
-            console.log("error",e)
             next(e);
         }
     };

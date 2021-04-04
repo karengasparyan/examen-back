@@ -43,10 +43,10 @@ class EventsController {
         description: 'required|string',
         limit: 'required|string',
         status: 'required|boolean',
-        image: 'required|string',
       });
 
       const { userId, title, description, limit, status, image } = req.body;
+      const {files} = req;
 
       const user = await users.findById(userId);
 
