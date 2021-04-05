@@ -7,7 +7,7 @@ const events = new Schema({
   description: { type: String,  required: true, },
   limit: { type: String,  required: true, },
   status: { type: String,  required: true, },
-  image: { type: String,  required: true, },
+  image: { type: Array,  required: true, },
   date: { type: Date, default: Date.now },
   userId: {
     type: mongoose.Schema.Types.ObjectId,

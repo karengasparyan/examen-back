@@ -11,6 +11,6 @@ export default async function validate(inputs, rules, customMessages) {
         _.forEach(v.errors, (data, key) => {
             errors[key] = data.message;
         });
-        throw new HttpError(422, { message: 'Unprocessable Entity', errors });
+        throw new HttpError(422, { message: errors });
     }
 }

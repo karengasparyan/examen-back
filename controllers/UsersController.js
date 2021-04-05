@@ -19,7 +19,7 @@ class UsersController {
                 repeatPassword: 'required|string',
                 first_name: 'required|string',
                 last_name: 'required|string',
-                age: 'numeric|string',
+                age: 'required|numeric|string',
                 phone: 'required|string',
             });
 
