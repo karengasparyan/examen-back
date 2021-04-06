@@ -6,6 +6,7 @@ import path from "path";
 import fs from "fs";
 import Promise from "bluebird";
 import md5 from "md5";
+import Utils from "../Utils/Utils";
 const  {users, events} = require( "../models").models;
 // import users from '../models/users';
 // import events from '../models/events';
@@ -112,7 +113,7 @@ class EventsController {
 
       const uniqId = uuid();
 
-      const direction = await path.join(__dirname, `../public/eventImage/folder_${uniqId}`);
+      const direction = path.join(__dirname, `../public/eventImage/folder_${uniqId}`);
       if (!fs.existsSync(direction)) {
         fs.mkdirSync(direction, {recursive: true});
       }
@@ -135,7 +136,7 @@ class EventsController {
         image: createImage,
       });
 
-      const directionRename = await path.join(__dirname, `../public/eventImage/folder_${newEvent.id}`);
+      const directionRename = path.join(__dirname, `../public/eventImage/folder_${newEvent.id}`);
 
       fs.renameSync(direction, directionRename);
 
@@ -151,7 +152,6 @@ class EventsController {
 
   static updateEvent = async (req, res, next) => {
     try {
-      console.log(req.body)
       await validate(req.body, {
         userId: 'required|string',
         eventId: 'required|string',
@@ -165,16 +165,7 @@ class EventsController {
       const { userId, eventId, title, description, limit, status, deleteImages } = req.body;
       const {files} = req;
 
-      const removeImage = (deleteImages, images) => {
-        let direction = path.join(__dirname, `../public/eventImage/folder_${eventId}`);
-        for (let i = 0; i < deleteImages.length; i++) {
-          const index = images.indexOf(deleteImages[i]);
-          if (index > -1) {
-            images.splice(index, 1);
-            fs.unlinkSync(path.join(direction, deleteImages[i]));
-          }
-        }
-      };
+      const direction = await path.join(__dirname, `../public/eventImage/folder_${eventId}`);
 
       const user = await users.findById(userId);
 
@@ -182,11 +173,17 @@ class EventsController {
         throw HttpError(404, 'invalid user');
       }
 
-      const images = await events.findById(eventId);
+      let { image } = await events.findById(eventId);
+      let updateImages = []
 
-      if (images){
-       await removeImage(deleteImages, images.image);
-      }
+      if (!_.isEmpty(deleteImages) && !_.isEmpty(image)){
+          for (let i = 0; i < deleteImages.length; i++) {
+            console.log('utils array', image)
+            image = image.filter(e => e !== deleteImages[i]);
+            fs.unlinkSync(path.join(direction, deleteImages[i]));
+          }
+        updateImages = image
+        }
 
       const allowTypes = {
         'image/jpeg': '.jpg',
@@ -201,7 +198,7 @@ class EventsController {
         }
       });
 
-      const createImage = [...images];
+      const createImage = [];
 
       await Promise.map(files, async (file) => {
         const ext = allowTypes[file.mimetype];
@@ -210,21 +207,24 @@ class EventsController {
         createImage.push(fileName);
       });
 
-      const newEvent = await events.updateOne({eventId}, {
-        title,
-        description,
-        limit,
-        status,
-        image: createImage
-       }
-      );
+      if (_.isEmpty(updateImages)){
+        updateImages = image;
+      }
+
+      const event = await events.findById(eventId);
+      event.image = [...updateImages,...createImage];
+      event.title = title;
+      event.description = description;
+      event.limit = limit;
+      event.status = status;
+      await event.save()
 
       res.json({
         status: 'ok',
-        event: newEvent,
+        event,
       });
     } catch (e) {
-      console.log(e)
+
       next(e);
     }
   };
