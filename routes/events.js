@@ -19,4 +19,12 @@ router.post('/delete', authorization, EventsController.deleteEvent);
 
 router.post('/single-event', authorization, EventsController.singleEvent);
 
+router.post('/pending-event', authorization, EventsController.pendingEvent);
+
+router.post('/success-event', authorization, EventsController.successEvent);
+
+router.post('/get-pending-events', EventsController.getPendingEvents);
+
+router.post('/get-success-events', authorization, EventsController.getSuccessEvents);
+
 export default router;
