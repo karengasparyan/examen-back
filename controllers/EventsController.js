@@ -14,416 +14,409 @@ const {users, events} = require("../models").models;
 
 class EventsController {
 
-    static getMyAllEvents = async (req, res, next) => {
-        try {
-            await validate(req.body, {
-                userId: 'required|string',
-                page: 'numeric',
-            });
+  static getMyAllEvents = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+        page: 'numeric',
+      });
 
-            const {userId, query = {}, page = 1,} = req.body;
+      const {userId, query = {}, page = 1,} = req.body;
 
-            let limit = 20;
-            const offset = (page - 1) * limit;
+      let limit = 20;
+      const offset = (page - 1) * limit;
 
-            const user = users.find({_id: userId});
+      const user = users.find({_id: userId});
 
-            if (!user) {
-                throw HttpError(404);
-            }
+      if (!user) {
+        throw HttpError(404);
+      }
 
-            const pagesCount = events.count();
+      const pagesCount = events.count();
 
-            const myEvents = await events.find({userId, ...query}).skip(offset).limit(limit).populate('userId');
+      const myEvents = await events.find({userId, ...query}).skip(offset).limit(limit).populate('userId');
 
-            await res.json({
-                status: 'ok',
-                myEvents,
-                myEventPagesCount: Math.ceil(pagesCount.length / limit)
-            });
-        } catch (e) {
+      await res.json({
+        status: 'ok',
+        myEvents,
+        myEventPagesCount: Math.ceil(pagesCount.length / limit)
+      });
+    } catch (e) {
 
-            next(e);
+      next(e);
+    }
+  };
+
+  static getAllEvents = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+        page: 'numeric',
+      });
+
+      const {query = {}, page = 1, userId} = req.body;
+
+      let limit = 20;
+      const offset = (page - 1) * limit;
+
+      const pagesCount = events.count();
+
+      const allEvents = await events.find({
+        ...query,
+        "groups": {"$not": {"$all": [userId]}}
+      }).skip(offset).limit(limit).populate('userId');
+
+
+      await res.json({
+        status: 'ok',
+        allEvents,
+        allEventPagesCount: Math.ceil(pagesCount.length / limit)
+      });
+    } catch (e) {
+      next(e);
+    }
+  };
+  static createEvent = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+        title: 'required|string',
+        description: 'required|string',
+        limit: 'required|string',
+        status: 'required',
+      });
+
+      const {userId, title, description, limit, status} = req.body;
+      const {files} = req;
+
+      const user = await users.findById(userId);
+
+      if (!user) {
+        throw HttpError(404);
+      }
+
+      if (_.isEmpty(files)) {
+        throw HttpError(402, 'Image is required');
+      }
+
+      const allowTypes = {
+        'image/jpeg': '.jpg',
+        'image/gif': '.gif',
+        'image/png': '.png',
+      };
+
+      files.forEach(file => {
+        const {mimetype} = file;
+        if (!allowTypes[mimetype]) {
+          throw HttpError(422, 'invalid file type');
         }
-    };
+      });
 
-    static getAllEvents = async (req, res, next) => {
-        try {
-            await validate(req.body, {
-                page: 'numeric',
-            });
+      const uniqId = uuid();
 
-            const {query = {}, page = 1,} = req.body;
+      const direction = path.join(__dirname, `../public/eventImage/folder_${uniqId}`);
+      if (!fs.existsSync(direction)) {
+        fs.mkdirSync(direction, {recursive: true});
+      }
 
-            let limit = 20;
-            const offset = (page - 1) * limit;
+      const createImage = [];
 
-            const pagesCount = events.count();
+      await Promise.map(files, async (file) => {
+        const ext = allowTypes[file.mimetype];
+        const fileName = `image_${uuid()}${ext}`;
+        fs.writeFileSync(path.join(direction, fileName), file.buffer);
+        createImage.push(fileName);
+      });
 
-            const allEvents = await events.find({...query}).skip(offset).limit(limit);
+      const newEvent = await events.create({
+        userId,
+        title,
+        description,
+        limit,
+        status,
+        image: createImage,
+      });
 
-            await res.json({
-                status: 'ok',
-                allEvents,
-                allEventPagesCount: Math.ceil(pagesCount.length / limit)
-            });
-        } catch (e) {
-            next(e);
+      const directionRename = path.join(__dirname, `../public/eventImage/folder_${newEvent.id}`);
+
+      fs.renameSync(direction, directionRename);
+
+      res.json({
+        status: 'ok',
+        event: newEvent,
+      });
+    } catch (e) {
+
+      next(e);
+    }
+  };
+
+  static updateEvent = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+        eventId: 'required|string',
+        title: 'required|string',
+        description: 'required|string',
+        limit: 'required|string',
+        status: 'required',
+        deleteImages: 'array',
+      });
+
+      const {userId, eventId, title, description, limit, status, deleteImages} = req.body;
+      const {files} = req;
+
+      const direction = await path.join(__dirname, `../public/eventImage/folder_${eventId}`);
+
+      const user = await users.findById(userId);
+
+      if (!user) {
+        throw HttpError(404, 'invalid user');
+      }
+
+      let {image} = await events.findById(eventId);
+      let updateImages = [];
+
+      if (!_.isEmpty(deleteImages) && !_.isEmpty(image)) {
+        for (let i = 0; i < deleteImages.length; i++) {
+          console.log('utils array', image)
+          image = image.filter(e => e !== deleteImages[i]);
+          fs.unlinkSync(path.join(direction, deleteImages[i]));
         }
-    };
-    static createEvent = async (req, res, next) => {
-        try {
-            await validate(req.body, {
-                userId: 'required|string',
-                title: 'required|string',
-                description: 'required|string',
-                limit: 'required|string',
-                status: 'required',
-            });
+        updateImages = image
+      }
 
-            const {userId, title, description, limit, status} = req.body;
-            const {files} = req;
+      const allowTypes = {
+        'image/jpeg': '.jpg',
+        'image/gif': '.gif',
+        'image/png': '.png',
+      };
 
-            const user = await users.findById(userId);
-
-            if (!user) {
-                throw HttpError(404);
-            }
-
-            if (_.isEmpty(files)) {
-                throw HttpError(402, 'Image is required');
-            }
-
-            const allowTypes = {
-                'image/jpeg': '.jpg',
-                'image/gif': '.gif',
-                'image/png': '.png',
-            };
-
-            files.forEach(file => {
-                const {mimetype} = file;
-                if (!allowTypes[mimetype]) {
-                    throw HttpError(422, 'invalid file type');
-                }
-            });
-
-            const uniqId = uuid();
-
-            const direction = path.join(__dirname, `../public/eventImage/folder_${uniqId}`);
-            if (!fs.existsSync(direction)) {
-                fs.mkdirSync(direction, {recursive: true});
-            }
-
-            const createImage = [];
-
-            await Promise.map(files, async (file) => {
-                const ext = allowTypes[file.mimetype];
-                const fileName = `image_${uuid()}${ext}`;
-                fs.writeFileSync(path.join(direction, fileName), file.buffer);
-                createImage.push(fileName);
-            });
-
-            const newEvent = await events.create({
-                userId,
-                title,
-                description,
-                limit,
-                status,
-                image: createImage,
-            });
-
-            const directionRename = path.join(__dirname, `../public/eventImage/folder_${newEvent.id}`);
-
-            fs.renameSync(direction, directionRename);
-
-            res.json({
-                status: 'ok',
-                event: newEvent,
-            });
-        } catch (e) {
-
-            next(e);
+      files.forEach(file => {
+        const {mimetype} = file;
+        if (!allowTypes[mimetype]) {
+          throw HttpError(422, 'invalid file type');
         }
-    };
+      });
 
-    static updateEvent = async (req, res, next) => {
-        try {
-            await validate(req.body, {
-                userId: 'required|string',
-                eventId: 'required|string',
-                title: 'required|string',
-                description: 'required|string',
-                limit: 'required|string',
-                status: 'required',
-                deleteImages: 'array',
-            });
+      const createImage = [];
 
-            const {userId, eventId, title, description, limit, status, deleteImages} = req.body;
-            const {files} = req;
+      await Promise.map(files, async (file) => {
+        const ext = allowTypes[file.mimetype];
+        const fileName = `image_${uuid()}${ext}`;
+        fs.writeFileSync(path.join(direction, fileName), file.buffer);
+        createImage.push(fileName);
+      });
 
-            const direction = await path.join(__dirname, `../public/eventImage/folder_${eventId}`);
+      if (_.isEmpty(updateImages)) {
+        updateImages = image;
+      }
 
-            const user = await users.findById(userId);
-
-            if (!user) {
-                throw HttpError(404, 'invalid user');
-            }
-
-            let {image} = await events.findById(eventId);
-            let updateImages = [];
-
-            if (!_.isEmpty(deleteImages) && !_.isEmpty(image)) {
-                for (let i = 0; i < deleteImages.length; i++) {
-                    console.log('utils array', image)
-                    image = image.filter(e => e !== deleteImages[i]);
-                    fs.unlinkSync(path.join(direction, deleteImages[i]));
-                }
-                updateImages = image
-            }
-
-            const allowTypes = {
-                'image/jpeg': '.jpg',
-                'image/gif': '.gif',
-                'image/png': '.png',
-            };
-
-            files.forEach(file => {
-                const {mimetype} = file;
-                if (!allowTypes[mimetype]) {
-                    throw HttpError(422, 'invalid file type');
-                }
-            });
-
-            const createImage = [];
-
-            await Promise.map(files, async (file) => {
-                const ext = allowTypes[file.mimetype];
-                const fileName = `image_${uuid()}${ext}`;
-                fs.writeFileSync(path.join(direction, fileName), file.buffer);
-                createImage.push(fileName);
-            });
-
-            if (_.isEmpty(updateImages)) {
-                updateImages = image;
-            }
-
-            const event = await events.findOneAndUpdate({_id: eventId}, {
-                image: [...updateImages, ...createImage],
-                title,
-                description,
-                limit,
-                status
-            }, {new : true});
+      const event = await events.findOneAndUpdate({_id: eventId}, {
+        image: [...updateImages, ...createImage],
+        title,
+        description,
+        limit,
+        status
+      }, {new: true});
 
 
-            res.json({
-                status: 'ok',
-                event,
-            });
-        } catch (e) {
+      res.json({
+        status: 'ok',
+        event,
+      });
+    } catch (e) {
 
-            next(e);
+      next(e);
+    }
+  };
+
+  static pendingEvent = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+        eventId: 'required|string',
+      });
+
+      const {userId, eventId} = req.body;
+
+      const user = await users.findById(userId);
+
+      if (_.isEmpty(user)) {
+        throw HttpError(422, 'invalid user');
+      }
+
+      const event = await events.findById(eventId).populate('userId');
+
+      const limit = 20;
+
+      if (!event) {
+        throw HttpError(422, 'invalid event');
+      }
+
+      if (event.members) {
+        if (event.members.length > limit) {
+          throw HttpError(422, `Events maximum limit ${limit}`);
         }
-    };
+      }
 
-    static pendingEvent = async (req, res, next) => {
-        try {
-            console.log(req.body)
-            await validate(req.body, {
-                userId: 'required|string',
-                eventId: 'required|string',
-            });
+      const members = _.uniqBy([...event.members, {userId, status: 'pending'}], 'userId');
 
-            const {userId, eventId} = req.body;
+      await events.findOneAndUpdate({_id: eventId}, {members});
 
-            const user = await users.findById(userId);
+      res.json({
+        status: 'ok',
+      });
+    } catch (e) {
 
-            if (_.isEmpty(user)) {
-                throw HttpError(422, 'invalid user');
-            }
+      next(e);
+    }
+  };
 
-            const event = await events.findById(eventId);
+  static successEvent = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+        eventId: 'required|string',
+      });
 
-            const limit = 20;
+      const {userId, eventId} = req.body;
 
-            if (!event) {
-                throw HttpError(422, 'invalid event');
-            }
+      const updateEvents = await events.findOne({
+        'members.userId': userId,
+        _id: eventId,
+        'members.status': 'pending'
+      })
+        .populate('userId');
 
-            if (event.members) {
-                if (event.members.length > limit) {
-                    throw HttpError(422, `Events maximum limit ${limit}`);
-                }
-            }
+      const updateMember = updateEvents.members.find(m => m.userId === userId);
 
-            const members = [];
+      updateMember.status = 'success';
 
-            members.push({userId, status: 'pending'});
+      updateEvents.members = [
+        ...updateEvents.members,
+        updateMember,
+      ]
 
-            await events.findOneAndUpdate({_id: eventId}, {members});
+      updateEvents.members = _.uniqBy(updateEvents.members, 'userId')
 
-            res.json({
-                status: 'ok',
-            });
-        } catch (e) {
+      await updateEvents.save();
 
-            next(e);
-        }
-    };
+      // const updateEvents = await events.findOneAndUpdate({
+      //   _id: eventId,
+      //   'members.status': 'pending',
+      //   'members.userId': userId
+      // }, {
+      //   'members.status': 'success'
+      // }, {new: true});
 
-    static successEvent = async (req, res, next) => {
-        try {
-            await validate(req.body, {
-                userId: 'required|string',
-                eventId: 'required|string',
-            });
+      res.json({
+        status: 'ok',
+        updateEvents
+      });
+    } catch (e) {
+      console.log(e)
+      next(e);
+    }
+  };
 
-            const {userId, eventId} = req.body;
+  static getSuccessEvents = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+      });
 
-            const user = await users.findById(userId);
+      const {userId} = req.body;
 
-            const event = await events.findById(eventId);
+      const successEvents = await events.find({userId, 'members.status': 'success'}).populate('userId');
 
-            if (!user) {
-                throw HttpError(422, 'invalid user');
-            }
+      res.json({
+        status: 'ok',
+        successEvents,
+      });
+    } catch (e) {
 
-            if (!event) {
-                throw HttpError(422, 'invalid event');
-            }
+      next(e);
+    }
+  };
 
-            const updateEvent = events.findById(eventId);
+  static getPendingEvents = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+      });
 
-            updateEvent.members.find(m => m.status === 'pending' && m.userId === userId).status = 'success';
+      const {userId} = req.body;
 
-            await events.findOneAndUpdate({_id: eventId}, {updateEvent}, {new : true});
+      const pendingEvents = await events.find({userId, 'members.status': 'pending'}).populate('userId');
 
-            res.json({
-                status: 'ok',
-            });
-        } catch (e) {
+      res.json({
+        status: 'ok',
+        pendingEvents,
+      });
+    } catch (e) {
+      console.log(e)
+      next(e);
+    }
+  };
 
-            next(e);
-        }
-    };
+  static deleteEvent = async (req, res, next) => {
+    try {
 
-    static getSuccessEvents = async (req, res, next) => {
-        try {
-            await validate(req.body, {
-                eventId: 'required|string',
-            });
+      await validate(req.body, {
+        eventId: 'required|string',
+        userId: 'required|string',
+      });
 
-            const {eventId} = req.body;
+      const {userId, eventId} = req.body;
 
-            const event = await events.findById(eventId);
+      const user = await users.findById(userId);
 
-            if (!event) {
-                throw HttpError(422, 'invalid event');
-            }
+      const event = await events.findById(eventId);
 
-            const events = events.findById(eventId);
+      if (!user) {
+        throw HttpError(422, 'invalid user');
+      }
 
-            const successEvents = await events.findById(eventId);
+      if (!event) {
+        throw HttpError(422, 'invalid event');
+      }
 
-            successEvents.members.filter(m => m.status === 'success');
+      await events.remove({_id: eventId});
 
-            res.json({
-                status: 'ok',
-                successEvents,
-            });
-        } catch (e) {
+      await res.json({
+        status: 'ok',
+      });
+    } catch (e) {
 
-            next(e);
-        }
-    };
+      next(e);
+    }
+  };
 
-    static getPendingEvents = async (req, res, next) => {
-        try {
-            await validate(req.body, {
-                eventId: 'required|string',
-            });
+  static singleEvent = async (req, res, next) => {
+    try {
 
-            const {eventId} = req.body;
+      await validate(req.body, {
+        eventId: 'required|string',
+      });
 
-            const event = await events.findById(eventId);
+      const {eventId} = req.body;
 
-            if (!event) {
-                throw HttpError(422, 'invalid event');
-            }
+      const singleEvent = await events.findById(eventId).populate('userId');
 
-            const events = events.findById(eventId);
+      if (!singleEvent) {
+        throw HttpError(422, 'invalid event');
+      }
 
-            const pendingEvents = await events.findById(eventId);
+      await res.json({
+        status: 'ok',
+        singleEvent,
+      });
+    } catch (e) {
 
-            pendingEvents.members.filter(m => m.status === 'pending');
-
-            res.json({
-                status: 'ok',
-                pendingEvents,
-            });
-        } catch (e) {
-
-            next(e);
-        }
-    };
-
-    static deleteEvent = async (req, res, next) => {
-        try {
-
-            await validate(req.body, {
-                eventId: 'required|string',
-                userId: 'required|string',
-            });
-
-            const {userId, eventId} = req.body;
-
-            const user = await users.findById(userId);
-
-            const event = await events.findById(eventId);
-
-            if (!user) {
-                throw HttpError(422, 'invalid user');
-            }
-
-            if (!event) {
-                throw HttpError(422, 'invalid event');
-            }
-
-            await events.remove({_id: eventId});
-
-            await res.json({
-                status: 'ok',
-            });
-        } catch (e) {
-
-            next(e);
-        }
-    };
-
-    static singleEvent = async (req, res, next) => {
-        try {
-
-            await validate(req.body, {
-                eventId: 'required|string',
-            });
-
-            const {eventId} = req.body;
-
-            const singleEvent = await events.findById(eventId);
-
-            if (!singleEvent) {
-                throw HttpError(422, 'invalid event');
-            }
-
-            await res.json({
-                status: 'ok',
-                singleEvent,
-            });
-        } catch (e) {
-
-            next(e);
-        }
-    };
+      next(e);
+    }
+  };
 
 }
 
