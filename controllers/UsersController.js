@@ -81,14 +81,37 @@ class UsersController {
 
             const directionRename = await path.join(__dirname, `../public/userImage/folder_${newUser.id}`);
 
-            fs.renameSync(direction, directionRename)
+            fs.renameSync(direction, directionRename);
 
             res.json({
                 status: 'ok',
                 user: newUser,
             });
         } catch (e) {
-            console.log(e)
+
+            next(e);
+        }
+    };
+
+    static single = async (req, res, next) => {
+        try {
+            await validate(req.body, {
+                userId: 'required|string',
+            });
+
+            const {userId} = req.body;
+
+            const user = await users.findById(userId);
+
+            if (!user) {
+                throw HttpError(422, 'invalid user');
+            }
+
+            res.json({
+                status: 'ok',
+                user,
+            });
+        } catch (e) {
             next(e);
         }
     };
@@ -145,7 +168,6 @@ class UsersController {
             next(e);
         }
     };
-
 
     static signIn = async (req, res, next) => {
         try {

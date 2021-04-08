@@ -8,6 +8,8 @@ const router = express.Router();
 
 router.post('/sign-in', UsersController.signIn);
 
+router.post('/single', UsersController.single);
+
 const upload = multer({ storage: memoryStorage() });
 
 router.post('/sign-up', upload.array('file[]') ,UsersController.signUp);

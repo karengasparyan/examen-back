@@ -9,6 +9,7 @@ const events = new Schema({
   status: { type: String,  required: true, },
   image: { type: Array,  required: true, },
   date: { type: Date, default: Date.now },
+  duration: {type: String, required: true,},
   members: { type: Array },
   userId: {
     type: mongoose.Schema.Types.ObjectId,

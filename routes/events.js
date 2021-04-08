@@ -21,7 +21,9 @@ router.post('/single-event', authorization, EventsController.singleEvent);
 
 router.post('/pending-event', authorization, EventsController.pendingEvent);
 
-router.post('/success-event',  EventsController.successEvent);
+router.post('/success-event', authorization,  EventsController.successEvent);
+
+router.post('/delete-request-event', authorization,  EventsController.deleteRequestEvent);
 
 router.post('/get-pending-events', authorization, EventsController.getPendingEvents);
 

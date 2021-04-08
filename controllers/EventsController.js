@@ -4,9 +4,6 @@ import _ from "lodash";
 import {v4 as uuid} from "uuid";
 import path from "path";
 import fs from "fs";
-import Promise from "bluebird";
-import md5 from "md5";
-import Utils from "../Utils/Utils";
 
 const {users, events} = require("../models").models;
 // import users from '../models/users';
@@ -26,7 +23,7 @@ class EventsController {
       let limit = 20;
       const offset = (page - 1) * limit;
 
-      const user = users.find({_id: userId});
+      const user = await users.find({_id: userId});
 
       if (!user) {
         throw HttpError(404);
@@ -34,7 +31,7 @@ class EventsController {
 
       const pagesCount = events.count();
 
-      const myEvents = await events.find({userId, ...query}).skip(offset).limit(limit).populate('userId');
+      const myEvents = await events.find({userId, ...query}).skip(offset).limit(limit).sort({date: 'desc'}).populate('userId');
 
       await res.json({
         status: 'ok',
@@ -54,7 +51,8 @@ class EventsController {
         page: 'numeric',
       });
 
-      const {query = {}, page = 1, userId} = req.body;
+      const {userId} = req;
+      const {query = {}, page = 1} = req.body;
 
       let limit = 20;
       const offset = (page - 1) * limit;
@@ -63,9 +61,8 @@ class EventsController {
 
       const allEvents = await events.find({
         ...query,
-        "groups": {"$not": {"$all": [userId]}}
-      }).skip(offset).limit(limit).populate('userId');
-
+        "userId": {"$ne": userId}
+      }).skip(offset).limit(limit).sort({date: 'desc'}).populate('userId');
 
       await res.json({
         status: 'ok',
@@ -76,17 +73,19 @@ class EventsController {
       next(e);
     }
   };
+
   static createEvent = async (req, res, next) => {
     try {
       await validate(req.body, {
         userId: 'required|string',
         title: 'required|string',
         description: 'required|string',
-        limit: 'required|string',
+        limit: 'required|numeric',
+        duration: 'required|string',
         status: 'required',
       });
 
-      const {userId, title, description, limit, status} = req.body;
+      const {userId, title, description, limit, duration, status} = req.body;
       const {files} = req;
 
       const user = await users.findById(userId);
@@ -133,6 +132,7 @@ class EventsController {
         title,
         description,
         limit,
+        duration,
         status,
         image: createImage,
       });
@@ -158,12 +158,13 @@ class EventsController {
         eventId: 'required|string',
         title: 'required|string',
         description: 'required|string',
-        limit: 'required|string',
+        limit: 'required|numeric',
+        duration: 'required|numeric',
         status: 'required',
         deleteImages: 'array',
       });
 
-      const {userId, eventId, title, description, limit, status, deleteImages} = req.body;
+      const {userId, eventId, title, description, limit, status, duration, deleteImages} = req.body;
       const {files} = req;
 
       const direction = await path.join(__dirname, `../public/eventImage/folder_${eventId}`);
@@ -179,7 +180,6 @@ class EventsController {
 
       if (!_.isEmpty(deleteImages) && !_.isEmpty(image)) {
         for (let i = 0; i < deleteImages.length; i++) {
-          console.log('utils array', image)
           image = image.filter(e => e !== deleteImages[i]);
           fs.unlinkSync(path.join(direction, deleteImages[i]));
         }
@@ -217,9 +217,9 @@ class EventsController {
         title,
         description,
         limit,
+        duration,
         status
       }, {new: true});
-
 
       res.json({
         status: 'ok',
@@ -248,19 +248,17 @@ class EventsController {
 
       const event = await events.findById(eventId).populate('userId');
 
-      const limit = 20;
-
       if (!event) {
         throw HttpError(422, 'invalid event');
       }
 
       if (event.members) {
-        if (event.members.length > limit) {
-          throw HttpError(422, `Events maximum limit ${limit}`);
+        if (event.members.length > event.limit) {
+          throw HttpError(422, `Events maximum limit ${event.limit}`);
         }
       }
 
-      const members = _.uniqBy([...event.members, {userId, status: 'pending'}], 'userId');
+      const members = _.uniqBy([...event.members, {userId, email: user.email, status: 'pending'}], 'userId');
 
       await events.findOneAndUpdate({_id: eventId}, {members});
 
@@ -282,25 +280,24 @@ class EventsController {
 
       const {userId, eventId} = req.body;
 
-      const updateEvents = await events.findOne({
+      const updateEvents = await events.findOneAndUpdate({
         'members.userId': userId,
         _id: eventId,
         'members.status': 'pending'
-      })
-        .populate('userId');
+      },{ "$set": { "members.$.status": 'success' }},{new: true}).populate('userId');
 
-      const updateMember = updateEvents.members.find(m => m.userId === userId);
-
-      updateMember.status = 'success';
-
-      updateEvents.members = [
-        ...updateEvents.members,
-        updateMember,
-      ]
-
-      updateEvents.members = _.uniqBy(updateEvents.members, 'userId')
-
-      await updateEvents.save();
+      // const updateMember = updateEvents.members.find(m => m.userId === userId);
+      //
+      // updateMember.status = 'success';
+      //
+      // updateEvents.members = [
+      //   ...updateEvents.members,
+      //   updateMember,
+      // ];
+      //
+      // updateEvents.members = _.uniqBy(updateEvents.members, 'userId');
+      //
+      // await updateEvents.save();
 
       // const updateEvents = await events.findOneAndUpdate({
       //   _id: eventId,
@@ -315,7 +312,36 @@ class EventsController {
         updateEvents
       });
     } catch (e) {
-      console.log(e)
+      next(e);
+    }
+  };
+
+  static deleteRequestEvent = async (req, res, next) => {
+    try {
+      await validate(req.body, {
+        userId: 'required|string',
+        eventId: 'required|string',
+        deleteType: 'required|string',
+      });
+
+      // default pending
+      const {userId, eventId, deleteType} = req.body;
+
+      const updateEvents = await events.findOne({
+        'members.userId': userId,
+        _id: eventId,
+        'members.status': deleteType
+      }).populate('userId');
+
+      updateEvents.members = updateEvents.members.filter(m => m.userId !== userId);
+
+      await updateEvents.save();
+
+      res.json({
+        status: 'ok',
+        updateEvents
+      });
+    } catch (e) {
       next(e);
     }
   };
@@ -328,7 +354,10 @@ class EventsController {
 
       const {userId} = req.body;
 
-      const successEvents = await events.find({userId, 'members.status': 'success'}).populate('userId');
+      const successEvents = await events.find({
+        'members.status': 'success',
+        'members.userId': userId,
+      }).sort({date: 'desc'}).populate('userId');
 
       res.json({
         status: 'ok',
@@ -348,21 +377,21 @@ class EventsController {
 
       const {userId} = req.body;
 
-      const pendingEvents = await events.find({userId, 'members.status': 'pending'}).populate('userId');
+      const pendingEvents = await events.find({
+        userId,
+        'members.status': 'pending'}).sort({date: 'desc'}).populate('userId');
 
       res.json({
         status: 'ok',
         pendingEvents,
       });
     } catch (e) {
-      console.log(e)
       next(e);
     }
   };
 
   static deleteEvent = async (req, res, next) => {
     try {
-
       await validate(req.body, {
         eventId: 'required|string',
         userId: 'required|string',
