@@ -4,6 +4,7 @@ import _ from "lodash";
 import {v4 as uuid} from "uuid";
 import path from "path";
 import fs from "fs";
+import Promise from "bluebird";
 
 const {users, events} = require("../models").models;
 // import users from '../models/users';
@@ -31,7 +32,10 @@ class EventsController {
 
       const pagesCount = events.count();
 
-      const myEvents = await events.find({userId, ...query}).skip(offset).limit(limit).sort({date: 'desc'}).populate('userId');
+      const myEvents = await events.find({
+        userId, ...query,
+        "status": {"$ne": 'finished'},
+      }).skip(offset).limit(limit).sort({date: 'desc'}).populate('userId');
 
       await res.json({
         status: 'ok',
@@ -61,7 +65,8 @@ class EventsController {
 
       const allEvents = await events.find({
         ...query,
-        "userId": {"$ne": userId}
+        "userId": {"$ne": userId},
+        "status": {"$ne": 'finished'},
       }).skip(offset).limit(limit).sort({date: 'desc'}).populate('userId');
 
       await res.json({
@@ -81,11 +86,12 @@ class EventsController {
         title: 'required|string',
         description: 'required|string',
         limit: 'required|numeric',
-        duration: 'required|string',
-        status: 'required',
+        // duration: 'required|string',
+        duration: 'required|numeric',
+        // status: 'required',
       });
 
-      const {userId, title, description, limit, duration, status} = req.body;
+      const {userId, title, description, limit, duration} = req.body;
       const {files} = req;
 
       const user = await users.findById(userId);
@@ -133,7 +139,7 @@ class EventsController {
         description,
         limit,
         duration,
-        status,
+        // status,
         image: createImage,
       });
 
@@ -146,7 +152,6 @@ class EventsController {
         event: newEvent,
       });
     } catch (e) {
-
       next(e);
     }
   };
@@ -159,12 +164,13 @@ class EventsController {
         title: 'required|string',
         description: 'required|string',
         limit: 'required|numeric',
+        // duration: 'required|string',
         duration: 'required|numeric',
-        status: 'required',
+        // status: 'required',
         deleteImages: 'array',
       });
 
-      const {userId, eventId, title, description, limit, status, duration, deleteImages} = req.body;
+      const {userId, eventId, title, description, limit, duration, deleteImages} = req.body;
       const {files} = req;
 
       const direction = await path.join(__dirname, `../public/eventImage/folder_${eventId}`);
@@ -218,7 +224,7 @@ class EventsController {
         description,
         limit,
         duration,
-        status
+        // status
       }, {new: true});
 
       res.json({

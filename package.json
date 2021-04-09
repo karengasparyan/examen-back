@@ -11,6 +11,7 @@
     "bluebird": "^3.7.2",
     "cookie-parser": "~1.4.5",
     "cors": "^2.8.5",
+    "cron": "^1.8.2",
     "debug": "~4.1.1",
     "dotenv": "^8.2.0",
     "esm": "^3.2.25",
@@ -22,7 +23,6 @@
     "mongoose": "^5.12.3",
     "morgan": "~1.10.0",
     "multer": "^1.4.2",
-    "node-cron": "^3.0.0",
     "node-input-validator": "^4.4.0",
     "uuid": "^8.3.2"
   },
