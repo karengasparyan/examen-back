@@ -5,10 +5,7 @@ import {v4 as uuid} from "uuid";
 import path from "path";
 import fs from "fs";
 import Promise from "bluebird";
-
-const {users, events} = require("../models").models;
-// import users from '../models/users';
-// import events from '../models/events';
+import {users, events} from "../models";
 
 class EventsController {
 
@@ -88,10 +85,11 @@ class EventsController {
         limit: 'required|numeric',
         // duration: 'required|string',
         duration: 'required|numeric',
+        address: 'required|string',
         // status: 'required',
       });
 
-      const {userId, title, description, limit, duration} = req.body;
+      const {userId, title, description, limit, duration, address} = req.body;
       const {files} = req;
 
       const user = await users.findById(userId);
@@ -139,6 +137,7 @@ class EventsController {
         description,
         limit,
         duration,
+        address,
         // status,
         image: createImage,
       });
@@ -166,11 +165,12 @@ class EventsController {
         limit: 'required|numeric',
         // duration: 'required|string',
         duration: 'required|numeric',
+        address: 'required|string',
         // status: 'required',
         deleteImages: 'array',
       });
 
-      const {userId, eventId, title, description, limit, duration, deleteImages} = req.body;
+      const {userId, eventId, title, description, limit, duration, address, deleteImages} = req.body;
       const {files} = req;
 
       const direction = await path.join(__dirname, `../public/eventImage/folder_${eventId}`);
@@ -224,6 +224,7 @@ class EventsController {
         description,
         limit,
         duration,
+        address,
         // status
       }, {new: true});
 
@@ -418,6 +419,9 @@ class EventsController {
       }
 
       await events.remove({_id: eventId});
+
+      const direction = path.join(__dirname, `../public/eventImage/folder_${eventId}`);
+      fs.rmdirSync(direction, { recursive: true });
 
       await res.json({
         status: 'ok',

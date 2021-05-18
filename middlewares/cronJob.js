@@ -1,5 +1,5 @@
 const CronJob = require('cron').CronJob;
-const {events} = require("../models").models;
+import {events} from "../models";
 
 
 // const differenceDate = (date) => {

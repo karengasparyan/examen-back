@@ -1,15 +1,20 @@
 #!/usr/bin/env node
-
 import http from 'http';
 import Debug from 'debug';
 import app from '../app';
+import { Server } from 'socket.io';
+import socket from '../socket/socket';
+import socketIo from '../services/socketIo';
+import db from '../services/mongoDb';
+
+const {PORT, MONGO_HOSTNAME, MONGO_PORT, MONGO_DB} = process.env
 
 const debug = Debug('messenger:server');
 /**
  * Get port from environment and store in Express.
  */
 
-const port = normalizePort(process.env.PORT || '4000');
+const port = normalizePort(PORT || '4000');
 app.set('port', port);
 
 /**
@@ -18,8 +23,11 @@ app.set('port', port);
 
 const server = http.createServer(app);
 
-// const io = socket(server);
-// Socket.init(io);
+const DB_URL = `mongodb://${MONGO_HOSTNAME}:${MONGO_PORT}/${MONGO_DB}`
+db.connect(DB_URL);
+
+const io = socketIo(server)
+socket(io)
 
 /**
  * Listen on provided port, on all network interfaces.

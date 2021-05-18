@@ -1,6 +1,6 @@
 import validate from '../services/validate';
 import HttpError from 'http-errors';
-const {users} = require("../models").models;
+import {users} from "../models";
 import md5 from 'md5';
 import fs from 'fs';
 import {v4 as uuid} from 'uuid';

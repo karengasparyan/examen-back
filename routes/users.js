@@ -1,8 +1,6 @@
 import express from 'express';
 import multer, { memoryStorage } from "multer";
-const path = require('path');
 import UsersController from "../controllers/UsersController";
-import authorization from "../middlewares/authorization";
 
 const router = express.Router();
 

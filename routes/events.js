@@ -5,7 +5,7 @@ import multer, {memoryStorage} from "multer";
 
 const router = express.Router();
 
-router.post('/all-my', authorization, EventsController.getMyAllEvents);
+router.post('/all-my', EventsController.getMyAllEvents);
 
 router.post('/all', authorization, EventsController.getAllEvents);
 
