@@ -10,5 +10,4 @@ const users = new Schema({
   age: { type: Number,  required: true, },
 },{collection:'users'}, { timestamps: true });
 
-
 export default model('users', users);

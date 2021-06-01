@@ -10,6 +10,7 @@ const events = new Schema({
   duration: {type: String, required: true,},
   address: {type: String, required: true,},
   members: { type: Array },
+  distance: { type: String, default: null },
   userId: {
     type: Schema.Types.ObjectId,
     ref: 'users',

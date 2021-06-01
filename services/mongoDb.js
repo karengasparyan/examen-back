@@ -1,12 +1,12 @@
 import mongoose from 'mongoose';
 
 class mongoDb {
-    static connect = DB_URL => {
+    static connect = (DB_URL, option = null) => {
         mongoose.set('useNewUrlParser', true);
         mongoose.set('useFindAndModify', false);
         mongoose.set('useCreateIndex', true);
         mongoose.set('useUnifiedTopology', true);
-        mongoose.connect(DB_URL);
+        mongoose.connect(DB_URL, option);
 
         mongoose.connection.on('error', err => {
             console.error(err);

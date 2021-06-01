@@ -6,11 +6,14 @@ import path from "path";
 import fs from "fs";
 import Promise from "bluebird";
 import {users, events} from "../models";
+import sharp from "sharp";
+import imageMimeTypes from "../Utils/imageMimeTypes";
 
 class EventsController {
 
   static getMyAllEvents = async (req, res, next) => {
     try {
+      console.log(req.body)
       await validate(req.body, {
         userId: 'required|string',
         page: 'numeric',
@@ -102,15 +105,9 @@ class EventsController {
         throw HttpError(402, 'Image is required');
       }
 
-      const allowTypes = {
-        'image/jpeg': '.jpg',
-        'image/gif': '.gif',
-        'image/png': '.png',
-      };
-
       files.forEach(file => {
         const {mimetype} = file;
-        if (!allowTypes[mimetype]) {
+        if (!imageMimeTypes[mimetype]) {
           throw HttpError(422, 'invalid file type');
         }
       });
@@ -125,10 +122,16 @@ class EventsController {
       const createImage = [];
 
       await Promise.map(files, async (file) => {
-        const ext = allowTypes[file.mimetype];
+        const ext = imageMimeTypes[file.mimetype];
         const fileName = `image_${uuid()}${ext}`;
-        fs.writeFileSync(path.join(direction, fileName), file.buffer);
+        // fs.writeFileSync(path.join(direction, fileName), file.buffer);
         createImage.push(fileName);
+        await sharp(file.buffer)
+            .resize(200, 200)
+            .toFormat(ext.substring(1))
+            .jpeg({ quality: 100 })
+            .png({ quality: 100 })
+            .toFile(path.join(direction,fileName))
       });
 
       const newEvent = await events.create({
@@ -192,15 +195,9 @@ class EventsController {
         updateImages = image
       }
 
-      const allowTypes = {
-        'image/jpeg': '.jpg',
-        'image/gif': '.gif',
-        'image/png': '.png',
-      };
-
       files.forEach(file => {
         const {mimetype} = file;
-        if (!allowTypes[mimetype]) {
+        if (!imageMimeTypes[mimetype]) {
           throw HttpError(422, 'invalid file type');
         }
       });
@@ -208,12 +205,21 @@ class EventsController {
       const createImage = [];
 
       await Promise.map(files, async (file) => {
-        const ext = allowTypes[file.mimetype];
+        const ext = imageMimeTypes[file.mimetype];
         const fileName = `image_${uuid()}${ext}`;
-        fs.writeFileSync(path.join(direction, fileName), file.buffer);
         createImage.push(fileName);
+        // fs.writeFileSync(path.join(direction, fileName), file.buffer);
+        // await sharp(path.join(file.buffer))
+        //     .resize(200,200)
+        //     .toFile(path.join(direction,convertFileName))
+        //     .catch(err => console.log(err));
+        await sharp(file.buffer)
+            .resize(200, 200)
+            .toFormat(ext.substring(1))
+            .jpeg({ quality: 100 })
+            .png({ quality: 100 })
+            .toFile(path.join(direction,fileName))
       });
-
       if (_.isEmpty(updateImages)) {
         updateImages = image;
       }
@@ -233,7 +239,7 @@ class EventsController {
         event,
       });
     } catch (e) {
-
+      console.log(e.message)
       next(e);
     }
   };
